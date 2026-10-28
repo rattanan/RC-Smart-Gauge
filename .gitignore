@@ -6,3 +6,13 @@ local.properties
 *.iml
 captures/
 dist/
+**/node_modules/
+**/.next/
+**/.vercel/
+**/.env*
+!**/.env.example
+**/*.tsbuildinfo
+**/test-results/
+**/playwright-report/
+**/.pio/
+**/__pycache__/

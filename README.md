@@ -1,4 +1,8 @@
-# RC Smart Gauge — native Android demo
+# RC Smart Gauge — Android + Next.js web companion
+
+The **Next.js web app and ESP32 internet uploader** are in [web/](web/README.md) and [firmware/wifi-telemetry/](firmware/wifi-telemetry/README.md). The web version targets Vercel + Upstash Redis, with configurable ESP32 Wi-Fi/HTTPS URL/secret, protected Live telemetry, an offline Demo and a detailed original 3D drift coupe. See [web verification](docs/WEB-TEST-REPORT.md).
+
+## Native Android demo
 
 Landscape Kotlin / Jetpack Compose tablet companion for an RC drift car. Phase 0–1 uses **offline deterministic Demo** data. The original screenshot is visual direction; it is not used as a UI bitmap.
 

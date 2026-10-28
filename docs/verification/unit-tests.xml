@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.rcvision.LapControllerTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-28T03:53:41" hostname="PC14265981" time="0.036">
+  <properties/>
+  <testcase name="continuousSignDoesNotCountRepeatedLaps" classname="com.rcvision.LapControllerTest" time="0.026"/>
+  <testcase name="completeWordAndCaseNormalization" classname="com.rcvision.LapControllerTest" time="0.001"/>
+  <testcase name="deterministicDemoProducesExpectedLapsAndBest" classname="com.rcvision.LapControllerTest" time="0.007"/>
+  <testcase name="equalBestRetainsEarliestAndUnfinishedIsExcluded" classname="com.rcvision.LapControllerTest" time="0.0"/>
+  <testcase name="intermittentMissesCannotRearm" classname="com.rcvision.LapControllerTest" time="0.001"/>
+  <testcase name="earlyReturnRequiresNewAbsence" classname="com.rcvision.LapControllerTest" time="0.0"/>
+  <testcase name="outOfOrderTimestampAndDuplicateSequenceDoNotStart" classname="com.rcvision.LapControllerTest" time="0.0"/>
+  <testcase name="outageCannotCountReliableLapAndReplayIsIgnored" classname="com.rcvision.LapControllerTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

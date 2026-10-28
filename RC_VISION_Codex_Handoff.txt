@@ -1,0 +1,327 @@
+RC VISION — CODEX IMPLEMENTATION HANDOFF
+Version 1.0 | 28 October 2026
+Owner: Boat
+Purpose: Implement an Android tablet companion for a radio-controlled drift car.
+This is a development specification, not a claim that hardware or vision performance has been verified.
+
+คำสั่งเริ่มงานสำหรับ Codex
+อ่านเอกสารนี้ทั้งหมด ตรวจ repository และ AGENTS.md ก่อน เริ่ม Phase 0–1 ให้ได้แอป Android ที่ build/run ได้ใน Demo Mode พร้อมหน้าจอ Drive ตามสเปก จากนั้นทำแต่ละ phase ตามลำดับ อย่าหยุดที่ scaffold หรือแผนอย่างเดียว ให้ทดสอบและรายงานสิ่งที่รันจริงกับส่วนที่ยังเป็น mock แยกกัน หากไม่ทราบรุ่นฮาร์ดแวร์ ให้เดินหน้าฝั่ง demo/replay ต่อได้ แต่ห้ามเดา GPIO แรงดัน receiver หรือความสามารถ telemetry ของ ESC ไม่ต้องสร้างเว็บไซต์แทนแอป Android
+
+1. PRODUCT AND ACCEPTED SCOPE
+Build RC VISION, a landscape Android tablet app:
+- A simple stylized rear-chase 3D view of our competition RC drift car and a detected car ahead.
+- Minimal pale-gray curved course, no detailed scenery, no live video in normal Drive mode.
+- Cyan/navy digital Smart Gauge inspired by aftermarket racing gauges.
+- Receiver throttle/steering telemetry; optional real speed, battery and temperature only when sensors exist.
+- Simulated engine sound driven by throttle, with Turbo Inline-6, V12 and Rotary profiles.
+- Onboard ESP32-CAM images processed on the tablet in the background.
+- Read the physical word START to begin/finish laps.
+- Total session duration, completed lap count, current lap time, each completed lap duration, best lap.
+- START DETECTED badge and simple sign graphic when detected.
+- Offline-first local processing. No Jev/cloud API in the live processing path.
+- The RC transmitter remains the sole driving control.
+
+Explicitly excluded:
+Clipping-zone scores, counter-steer scoring, autonomous control, automatic braking, BYD/OBD integration, CarPlay/Carlinkit integration, certified collision warnings, accurate metric ranging or full track reconstruction in MVP.
+Do not reintroduce rejected scoring features.
+
+2. HONEST REPRESENTATION
+Demo mode may animate a known synthetic track and synthetic cars, with a permanent DEMO badge.
+Live mode must distinguish observed, estimated, simulated and missing values.
+Receiver steering alone does not determine vehicle yaw, drift angle, track shape or world position.
+A monocular detector bounding box does not provide verified metric distance.
+No sensor -> display em dash, not a fake zero or plausible demo value.
+SIM RPM and SIM GEAR must always be labelled.
+The minimal curve in live mode is an illustrative course unless a separately calibrated/manual map is provided; label it accordingly. It is not reconstructed from steering.
+The own car's pose may be a cosmetic animation but must not be presented as measured drift.
+A detected lead car is a symbolic camera-relative representation. Do not invent hidden cars or precise physical positions.
+Recognizing START does not establish its exact 3D world position. Show a badge and symbolic sign, or approximate camera-relative placement clearly treated as illustrative.
+Optional camera preview exists only in Setup/Diagnostics for aiming, calibration and debugging.
+
+3. TECHNICAL DEFAULTS — VERIFY BEFORE IMPLEMENTING
+Proposed baseline: native Kotlin, Jetpack Compose, coroutines/Flow, ViewModel, Room, DataStore, Gradle version catalog.
+Provisional minSdk 26; confirm actual tablet before hardware deployment. Choose supported stable Android/Gradle/plugin versions from current official documentation, record exact versions, do not use dynamic '+' versions.
+Use OpenCV for resize/crop/color operations and optional tracking.
+Use bundled ML Kit Latin text recognition for START, to allow offline initialization; verify Android compatibility and licenses.
+Vehicle detection later: a small LiteRT-compatible detector evaluated/fine-tuned on actual RC drift images. Do not assume a full-size road-car model works on RC cars.
+For real 3D, perform a small Android renderer spike (e.g. Filament or a suitable maintained wrapper) and choose based on lifecycle stability and profiling. Own or license all models. Build a simple low-poly car if no licensed asset exists.
+Do not generate a new image with AI for each frame: reuse static meshes and animate transforms.
+Audio baseline: dedicated audio engine generating PCM through AudioTrack; optimize with native/Oboe only if measured latency warrants it.
+Use synthetic/procedural sound initially. Premium multi-sample engine packs are a later asset task with licensing recorded.
+
+Suggested modules/packages:
+app/
+core/model, core/time, core/settings
+data/telemetry, data/camera, data/session
+domain/lap, domain/sound, domain/vision
+feature/drive, feature/devices, feature/sounds, feature/telemetry
+render/
+firmware/receiver-node
+firmware/camera-node
+tools/replay
+docs/
+
+Interfaces:
+TelemetrySource, FrameSource, TextRecognizer, VehicleDetector, SceneMapper,
+LapController, EngineSoundEngine, SessionRepository, MonotonicClock.
+Implement Demo, Replay and Live sources behind the same interfaces.
+No network, OCR, database, JPEG decoding or audio synthesis on the UI thread.
+
+4. HARDWARE AND COMMUNICATION
+Default prototype: two nodes.
+A. Receiver ESP32: read PWM throttle and steering in parallel; no outputs to servo/ESC.
+B. ESP32-CAM: acquire timestamped JPEG frames and stream them over Wi-Fi.
+They and the tablet share one local network; begin with a router. Later evaluate hotspot/AP arrangements.
+If the user only has one board, assess pin/resource conflicts before merging firmware.
+
+Hardware blockers to resolve before wiring:
+- Receiver brand/model, output protocol and signal voltage.
+- ESC model and gyro wiring.
+- Whether steering comes from receiver (driver command) or gyro output (servo command).
+- ESP32 board/camera model, battery/BEC characteristics.
+- Tablet model, SoC, RAM and Android version.
+Do not infer actual wheel angle from servo-command PWM.
+Use adjustable channel min/center/max, deadband, reversed flag and calibration persistence.
+Measure voltage and design proper level shifting/common reference/power regulation before connecting GPIO.
+Provide board-specific pin table and wiring only after these details are verified.
+Document radio/Wi-Fi coexistence and range testing with the car wheels raised first.
+
+Proposed telemetry transport: WebSocket JSON v1, configurable host, bounded reconnect backoff.
+Initial target 50 messages/s; configurable and not a guarantee.
+Camera: timestamped JPEG multipart stream or equivalent framed binary transport. A stock MJPEG stream without capture timestamps is allowed for preview, but cannot claim accurate capture-based lap timing.
+Node discovery: manual IP works first, optional mDNS later. Never hardcode one subnet.
+
+Example receiver packet:
+{
+  "schema": 1,
+  "device_id": "rx-01",
+  "boot_id": "new-id-on-each-boot",
+  "seq": 1250,
+  "t_capture_us": 25000000,
+  "throttle": 0.38,
+  "steering": -0.65,
+  "steering_source": "receiver",
+  "signal_valid": true,
+  "speed_mps": null,
+  "battery_v": null,
+  "motor_temp_c": null
+}
+Conventions: steering -1 left, +1 right, 0 neutral.
+Throttle signed raw calibrated command: negative is reverse/brake command region, not proof of physical reverse or braking. ESC behavior must be configured.
+Malformed, out-of-range or out-of-order packets must not affect gauges or sound.
+Every frame carries device_id, boot_id, sequence, capture timestamp and resolution.
+Clock sync: map each device's monotonic clock onto the tablet's monotonic clock with repeated round-trip samples; track uncertainty and reset mapping on boot_id change. Reception time is an explicit degraded fallback.
+Keep raw capture times and mapped event times in diagnostics.
+
+5. VISION PIPELINE
+Decode only the newest available frame. Bounded queue size 1 with replace-oldest behavior.
+Timestamp and frame age stay attached through all processing.
+Do not process stale frames after reconnect.
+Crop/downscale for detection while preserving enough pixels for START lettering.
+Run tasks independently from rendering:
+- OCR candidate detection and START confirmation.
+- Later, vehicle detector/tracker and optional body-color estimate.
+- Mapping of results to simple scene objects.
+
+START text:
+Normalize case/whitespace and compare complete word START; do not accept RESTART as START.
+Support slanted views with crop/perspective preprocessing only if testing shows benefit.
+Confirm across a short temporal window and check consistent bounding-box location rather than accepting unrelated letters.
+Use detector confidence only if actually provided; do not invent OCR confidence fields.
+Configurable ROI during setup, but do not restrict so tightly that drift yaw always loses the sign.
+Parameters below are starting values to benchmark, not proven defaults:
+3 positive observations within 500 ms; confirmed absence for 1500 ms; minimum lap duration 10 seconds.
+Sampling must be sufficient to see the sign during a pass. Measure sign visibility duration and tune parameters; never promise 3-frame confirmation if only one frame is obtainable.
+
+Vehicle detection (later phase):
+Capture a permission-appropriate RC image dataset with varying bodies, lighting, yaw and occlusion.
+Evaluate recall, false positives and frame latency before enabling live display.
+Classes may begin with just RC_CAR and UNKNOWN; do not claim detailed model classification.
+Color classification limited to selected body pixels; report unknown if ambiguous.
+Lost tracks fade to unknown/disappear after configurable timeout, not continue indefinitely.
+No distance collision alerts in MVP.
+
+6. SESSION AND LAP STATE MACHINE
+Use monotonic time for duration, wall clock only for human-readable session dates.
+User presses Start Session -> session timer runs and lap engine enters WAITING_FOR_START.
+Session elapsed is total time since session start including pit stops until End Session. Do not implement Pause in MVP to avoid ambiguous accounting.
+WAITING_FOR_START + confirmed START:
+- Start lap 1 at the first qualifying observation in the confirmation window.
+- Completed laps remains 0.
+- Enter DISARMED_VISIBLE.
+
+DISARMED_VISIBLE:
+- Continuous sign visibility never produces extra laps.
+- Confirmed sign absence -> WAITING_TO_REARM.
+
+WAITING_TO_REARM:
+- Require confirmed absence plus minimum lap duration before becoming ARMED.
+- If sign returns too early, do not count and require absence again.
+- A long visual gap due to dropped camera data is UNKNOWN, not evidence of sign absence.
+
+ARMED + confirmed START:
+- Finalize current lap using the new event's capture-derived timestamp.
+- Persist immutable completed-lap record.
+- Start next lap using that exact same event timestamp (no artificial gap).
+- Return to DISARMED_VISIBLE.
+- Debounce duplicate frames, observations and reconnect replays.
+- BEST is the shortest valid completed lap; current unfinished lap never participates.
+- Equal best times: mark ties or consistently retain earliest, document choice.
+
+Camera loss:
+Keep session/current timer running but flag lap timing as unverified when sign passes could have been missed. Do not invent missed laps.
+After reconnect, require fresh observations and a controlled rearm; a START visible immediately after reconnect must not silently finalize an unreliable lap.
+Offer manual correction/mark invalid in session review with an audit trail.
+End Session preserves unfinished lap separately, excluded from best and completed count.
+Process death restores saved session as interrupted; never silently resume with fake continuity.
+
+This is sign-sighting lap timing, not proof of a full lap or exact line crossing.
+Variable detection distance/angle causes timing error even with perfect network timestamps.
+Do not add checkpoints unless the user later requests them.
+
+7. AUDIO
+Telemetry-driven local engine simulation; never derive sound responsiveness from OCR/vision loop.
+Map throttle load to virtual RPM with smoothing, idle, rev limit and release behavior.
+Without speed sensor, virtual gears/RPM are cosmetic; labels must remain SIM.
+Use phase-continuous synthesis or crossfaded samples to prevent clicks.
+Muted by default until user enables; remember volume preference but handle startup safely.
+On stale/invalid receiver signal fade sound to silence, don't freeze high RPM.
+Handle Android audio focus, calls, navigation and app background lifecycle.
+Speaker/tablet audio first. Bluetooth and later car audio add buffering; measure separately.
+Profiles: Turbo I6, V12, Rotary. Initial synthetic presets must be described as synthetic, not authentic recordings.
+
+8. UI SPEC
+Landscape tablet-first, responsive for common 16:10 and 16:9 sizes.
+Visual language: charcoal/navy, cyan highlights, restrained cyan-violet-red tach arc, off-white scene.
+Readable numerals, minimum 48dp touch targets, sufficient contrast, no excessive glow.
+
+Top:
+RC VISION, mode badge DEMO/REPLAY/LIVE, independent RX and VISION freshness status, settings.
+Timing strip:
+SESSION | LAPS COMPLETED | CURRENT LAP | BEST LAP.
+Do not confuse total session time with the sum of completed laps.
+
+Left scene:
+Close rear chase view of clean white competition drift coupe, restrained cyan accent and simple wing.
+One red lead car only when demo or actually detected.
+Minimal gray curved course, no photo textures, no busy scenery.
+START DETECTED chip has short hold time; physical sign glyph is symbolic.
+Do not let held chip create multiple events.
+Allow tapping scene to enlarge, retaining connection/lap status.
+
+Right:
+Smart Gauge: sequential correct numeric tick marks, needle aligned with value.
+SIM RPM, SIM GEAR. Optional SPEED, BATTERY, MOTOR TEMP show em dash when unavailable.
+THROTTLE bar; centered STEERING bar correctly fills left for negative.
+Lap History: all completed laps in scrollable list; BEST highlight; invalid/unverified indicators.
+
+Bottom:
+Audio preset selector, volume, mute.
+Navigation Drive / Telemetry / Sounds / Devices.
+Devices: manual endpoints, connection checks, camera diagnostics, calibration and source selection.
+Telemetry: raw vs normalized values, frame age, packet loss, replay and session records.
+Sounds: preset tuning and preview.
+Sessions accessible from lap history; export session/laps as CSV.
+
+Design mockup is inspiration, not a bitmap to paste as functional UI.
+All controls must work. Fixed display values allowed only in explicit demo fixtures.
+
+9. PERSISTENCE AND EXPORT
+Room entities: Session, Lap, DeviceConfig reference, relevant DetectionEvent.
+Session stores mode, start date, total monotonic duration, completion/interruption state, timing-quality summary.
+Lap stores index, start/end event IDs/times, duration, valid/unverified/manual flags and edit history.
+Export UTF-8 CSV through Android share/document APIs.
+Persist at each lap boundary and important lifecycle transitions.
+Record logs/frames only when user explicitly enables diagnostic recording; bounded retention and storage controls.
+No background cloud upload.
+
+10. PERFORMANCE AND FAILURE BEHAVIOR
+Targets, not promises:
+- 30 FPS baseline UI on target tablet; 60 FPS stretch.
+- Vision initial aim 5–10 processed FPS, adapted to hardware and sign visibility needs.
+- Telemetry receive ~50 Hz; throttle configurable.
+- No growing queues; process fresh frames instead of old backlog.
+- Measure end-to-end camera frame age, OCR latency, UI frame times, telemetry age and audio latency.
+- Target practical audio response below 100 ms locally; report measurement method and actual result.
+
+Initial stale thresholds configurable:
+RX >300 ms -> stale indicator, fade audio; VISION >1000 ms -> unavailable.
+Treat these as starting values requiring real Wi-Fi tests.
+Do not animate stale cars as if observed.
+Run 20-minute sustained test for thermal throttling, memory growth and disconnect behavior.
+If unable to run on real hardware, clearly mark unverified results rather than reporting achieved FPS.
+
+11. SEQUENCED BUILD AND EXIT CRITERIA
+Phase 0 — Repository and environment
+Inspect existing repo/AGENTS; create project if absent. Pin compatible tools, README build steps, architecture decision notes.
+Exit: Gradle build and basic launch, or a precise documented SDK/dependency blocker with runnable remaining work.
+
+Phase 1 — Demo vertical slice (FIRST DELIVERABLE)
+Implement Drive screen, minimal true 3D scene, gauges, simulated telemetry, timing strip, lap history, settings/navigation, mute and volume.
+Demo script emits deterministic START seen/disappeared events and synthetic telemetry.
+Exit: installable debug APK when toolchain exists; demo session produces repeatable laps and best; UI usable in two tablet aspect ratios. No network required.
+
+Phase 2 — Session and lap engine + OCR replay
+Implement state machine, Room persistence, CSV, ML Kit OCR adapter, local image/video replay fixtures.
+Exit: repeatable tests for sign debounce, early return, loss/reconnect, interruptions, best calculation and restart persistence.
+
+Phase 3 — Receiver node + live telemetry
+Confirm hardware before pin assignment. Implement calibrated PWM input, timestamps, WebSocket, connection indicators and sound failover.
+Exit: raw/normalized readings verified with stationary car, no effect on original RC controls.
+
+Phase 4 — ESP32-CAM + live START
+Implement timestamped stream, clock mapping, reconnect handling, real sign OCR.
+Exit: bench and slow-track dataset reports missed/false events and measured timing variance. Do not declare race-grade timing.
+
+Phase 5 — Sound quality
+Improve synthetic profiles or integrate licensed sample sets. Measure latency/focus/fade behavior.
+Exit: throttle-responsive audio without clicks or persistent sound after stale telemetry.
+
+Phase 6 — Lead-car detection and scene integration
+Select and evaluate small model using real RC footage; track and display symbolic car positions.
+Exit: measured quality meets user-agreed threshold; unknown/lost states work. No fabricated world geometry.
+
+Phase 7 — Field hardening
+20-minute session, radio coexistence/range, power/heat, reconnect, background/resume, recording/export.
+Exit: APK, source, firmware, wiring for confirmed boards, test report and known limitations.
+
+Do not hide unavailable phases behind fake 'working' UI. Continue independent work while hardware details are pending.
+
+12. MEANINGFUL TESTS
+Unit:
+- START once over 100 frames produces one start, not 100 laps.
+- Case normalization; RESTART rejection.
+- Valid exit/re-entry after min duration produces one completed lap.
+- Early return, intermittent OCR loss and network outage do not rearm incorrectly.
+- Duplicate/out-of-order frames and device reboot handled.
+- Timer independent from wall-clock changes; correct best/unfinished/invalid behavior.
+- Negative steering produces left fill; sensor null stays absent.
+- Invalid/stale telemetry silences audio state.
+Integration/replay:
+- Annotated sign clips at different angles/lighting; no-sign negative clips.
+- Frame queue bounded under slow inference.
+- Session stored/restored and CSV matches records.
+- UI remains responsive during JPEG decode/OCR/network loss.
+Hardware:
+Document test setup and results; no invented latency, detection accuracy or frame rates.
+When no tablet exists, use emulator for functional checks only, not performance conclusions.
+
+13. CODEX DELIVERY REQUIREMENTS
+Return source files, build commands, debug APK if successfully built, firmware source/configuration,
+data contract, setup instructions, test output summary, demo/replay instructions and known limitations.
+Include a task checklist reflecting completed/blocked work, not just a plan.
+Do not request cloud keys or introduce paid APIs.
+Do not flash physical devices, publish apps or change receiver/ESC settings without a specific user request.
+Use reversible development defaults and complete each authorized code phase without unnecessary approval prompts.
+
+14. REFERENCE DOCUMENTATION TO VERIFY DURING BUILD
+OpenCV: https://docs.opencv.org/
+ML Kit Android text recognition: https://developers.google.com/ml-kit/vision/text-recognition/v2/android
+LiteRT Android: https://ai.google.dev/edge/litert/android
+ESP32 camera driver: https://github.com/espressif/esp32-camera
+ESP-IDF: https://docs.espressif.com/projects/esp-idf/
+Use current official docs for versions/API behavior. This plan deliberately makes no hardware-specific pin or FPS guarantees.
+
+15. FIRST MESSAGE TO PASTE INTO CODEX
+Implement RC VISION from this attached handoff. Start with Phase 0 and Phase 1, producing a real native Android app with an offline deterministic Demo mode, not a web mockup. Follow the UI and data-truth rules. Design the receiver, camera, OCR, lap and audio components behind replaceable interfaces. Implement and test the lap engine early. Preserve the excluded scope (no clipping-zone scoring, no autonomous control). If hardware models are missing, finish demo/replay functionality and list only the specific details needed for wiring. Build and verify what the environment supports, and report actual test results without claiming unperformed hardware tests.
+

@@ -20,6 +20,7 @@ For locally testing the internet telemetry API, run `npm run secrets` to create 
 
 1. Import `rattanan/RC-Smart-Gauge` in Vercel. Select **Root Directory: `web`**, Framework: Next.js, Node: 24.x. Install/build commands are `npm ci` / `npm run build`; let Vercel determine the output directory.
 2. Add an **Upstash Redis** database through Vercel Marketplace or your existing Upstash account. Choose a nearby region for both services. No database is provisioned automatically by this repository.
+   The app also accepts the Marketplace-provided `KV_REST_API_URL` / `KV_REST_API_TOKEN` pair directly; duplicating them under the Upstash names is unnecessary. The included Vercel config selects Singapore (`sin1`).
 3. In Vercel Environment Variables, add the following for Production. Read generated values privately from your local `.env.local`; do not send them through chat or commit the file.
 
 | Variable | Purpose |

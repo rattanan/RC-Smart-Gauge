@@ -31,12 +31,15 @@ const memory = () =>
     retired: new Map(),
     limits: new Map(),
   });
+function redisCredentials() {
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+    return { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN };
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
+    return { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  return null;
+}
 export function storeMode(): "redis" | "development-memory" | "unconfigured" {
-  if (
-    process.env.UPSTASH_REDIS_REST_URL &&
-    process.env.UPSTASH_REDIS_REST_TOKEN
-  )
-    return "redis";
+  if (redisCredentials()) return "redis";
   if (
     process.env.NODE_ENV !== "production" &&
     process.env.ALLOW_MEMORY_STORE === "true"
@@ -45,12 +48,14 @@ export function storeMode(): "redis" | "development-memory" | "unconfigured" {
   return "unconfigured";
 }
 async function redis<T>(command: (string | number)[]): Promise<T> {
-  const base = process.env.UPSTASH_REDIS_REST_URL!;
+  const credentials = redisCredentials();
+  if (!credentials) throw new Error("Redis not configured");
+  const base = credentials.url;
   if (!base.startsWith("https://")) throw new Error("Redis requires HTTPS");
   const response = await fetch(base, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+      Authorization: `Bearer ${credentials.token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(command),

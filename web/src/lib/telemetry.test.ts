@@ -87,7 +87,16 @@ describe("atomic acceptance reference", () => {
     vi.stubEnv("ALLOW_MEMORY_STORE", "true");
     vi.stubEnv("UPSTASH_REDIS_REST_URL", undefined);
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", undefined);
+    vi.stubEnv("KV_REST_API_URL", undefined);
+    vi.stubEnv("KV_REST_API_TOKEN", undefined);
     expect(storeMode()).toBe("unconfigured");
+  });
+  it("accepts the Vercel Marketplace Redis variable names", () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", undefined);
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", undefined);
+    vi.stubEnv("KV_REST_API_URL", "https://redis.example");
+    vi.stubEnv("KV_REST_API_TOKEN", "fixture-token");
+    expect(storeMode()).toBe("redis");
   });
 });
 describe("viewer authorization", () => {

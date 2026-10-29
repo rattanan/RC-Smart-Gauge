@@ -1,5 +1,7 @@
 # Web / ESP32 verification — 28 October 2026
 
+Update, 29 October 2026: production is deployed at https://rc-smart-gauge.vercel.app with real Upstash Redis. The Marketplace variable-name compatibility test increases the unit suite to 20 passing tests. Actual production authorization, ingestion, duplicate rejection and Redis persistence checks pass; see `DEPLOYMENT.md`. The original deployment-state notes below describe the 28 October local verification stage.
+
 ## Implemented
 
 - Separate Next.js web companion under `web/`, with a responsive Drive dashboard, original detailed procedural 3D coupe, Demo/Live source selection, timing/history, synthetic sound and Devices setup guidance.

@@ -8,6 +8,10 @@
 - Both repository-root and web-root Vercel manifests select Singapore to support CLI deployment from the repository root and Git builds rooted at `web`.
 - `.vercelignore` excludes local environment files, SDKs, Android build artifacts and dependencies from CLI uploads.
 
-The first public deployment serves the Demo successfully (HTTP 200). Live remains disabled until the app's dashboard/session/device credentials are explicitly approved and configured in Production Environment Variables. Credentials must not be committed or printed. Local credentials were generated in ignored `web/.env.local` for private owner access.
+Production is deployed and Live configuration is enabled. The owner explicitly approved storing the app's dashboard/session/device credentials as sensitive Production Environment Variables. Credentials were passed through stdin and were not printed or committed. The owner can read their corresponding local values privately in ignored `web/.env.local`.
+
+Verified against the public production URL on 29 October 2026: homepage 200; anonymous state 401; viewer login 200; authenticated telemetry upload 200; duplicate upload 409; authenticated state read 200 with actual Redis persistence; logout 200. Test traffic was labeled `source: demo`, and the final packet marked its synthetic receiver signal invalid. Physical ESP32 hardware remains unverified.
+
+Production deployment `dpl_HL5PZ6rmhqqz7R6yJ4uzGUPryn4r` reached READY. Vercel inspection confirmed functions in `sin1` (Singapore). The connected Git repository can deploy subsequent commits automatically.
 
 Do not paste the ESP32 device secret into browser login: Live login uses `DASHBOARD_PASSWORD`. Device uploads use `DEVICE_SECRET` in the Authorization header and the stable production `/api/ingest` URL.
